@@ -46,6 +46,7 @@ class Edge:
 class Engine:
     def __init__(self):
         self.graph: Dict[Node, Set[Edge]] = {}
+        self.computed: Dict[Hashable, Dist] = None
     
     def remove_node(self, node: Node):
         del self.graph[node]
@@ -80,6 +81,7 @@ class Renderer:
 
         self.start: Optional[Node] = None
         self.end: Optional[Node] = None
+        self.path: Set[Edge] = set()
 
         self.mode = Mode.NORMAL
         self.camera = Vector2()
@@ -149,6 +151,14 @@ class Renderer:
             self.selected_node = None
             self.nearby_node = None
             self.node_dragging = None
+    
+    def maybe_update_path(self):
+        if self.start and self.end:
+            edge = self.engine.computed[self.end]
+            while edge:
+                # TODO: finish this
+                #self.path.add()
+                pass
 
     def render(self):
         event = pygame.event.poll()
@@ -203,17 +213,17 @@ class Renderer:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.selected_node = None
-            elif event.key == pygame.K_r and self.start and self.end:
-                print("Running.")
-                
             if self.nearby_node is not None and self.selected_node is None and self.node_dragging is None:
                 # nearby and not drawing and not dragging
                 if event.key == pygame.K_s:
                     self.start = self.nearby_node
+                    self.engine.computed = dijkstra(self.engine.graph, self.start)
                     if self.end == self.nearby_node: self.end = None
+                    self.maybe_update_path()
                 elif event.key == pygame.K_e:
                     self.end = self.nearby_node
                     if self.start == self.nearby_node: self.start = None
+                    self.maybe_update_path()
         
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_LSHIFT and not self.node_dragging:
