@@ -24,7 +24,12 @@ class MyEdge(BaseEdge, NamedTuple):
 @dataclass
 class Dist:
     dist: float
-    shortest_parent: Optional[Hashable]
+    shortest_parent: Optional[BaseEdge]
+
+    def __lt__(self, o):
+        if isinstance(o, Dist):
+            return self.dist < o.dist
+
 
 
 def dijkstra(graph: Dict[Hashable, Set[BaseEdge]], start: Hashable) -> Dict[Hashable, Dist]:
@@ -33,7 +38,7 @@ def dijkstra(graph: Dict[Hashable, Set[BaseEdge]], start: Hashable) -> Dict[Hash
     # TODO: store metadata in tdists about where the previous edge came from!! To recreate the path
 
     current = start
-    tdists[current] = 0
+    tdists[current].dist = 0
 
     unvisited = []
     heapq.heappush(unvisited, (tdists[current], current))
@@ -47,9 +52,11 @@ def dijkstra(graph: Dict[Hashable, Set[BaseEdge]], start: Hashable) -> Dict[Hash
 
         for edge in graph[current]:
             if edge.end not in visited:
-                new_dist = tdists[current] + edge.weight
-                tdists[edge.end].dist = min(tdists[edge.end], new_dist)
-                tdists[edge.end].shortest_parent = current
+                new_dist = tdists[current].dist + edge.weight
+                if new_dist < tdists[edge.end].dist:
+                    tdists[edge.end].dist = new_dist
+                    tdists[edge.end].shortest_parent = edge # BUG: not working?
+                # TODO: store edge instead of node
                 heapq.heappush(unvisited, (tdists[edge.end], edge.end))
 
         visited.add(current)

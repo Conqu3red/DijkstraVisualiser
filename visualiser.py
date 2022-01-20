@@ -21,6 +21,10 @@ pygame.mouse.set_cursor(pointerNormal)
 class Vector2(_Vector2):
     def __hash__(self):
         return hash((self.x, self.y))
+    
+    Zero: "Vector2"
+
+Vector2.Zero = Vector2(0, 0)
 
 @dataclass
 class Node:
@@ -58,6 +62,9 @@ class Engine:
 
 class Mode(Enum):
     NORMAL = 0
+
+def rotate_point(point: Vector2, origin: Vector2, angle: float):
+    return origin + (point - origin).rotate(angle)
 
 
 class Renderer:
@@ -99,6 +106,9 @@ class Renderer:
     def draw_circle(self, color, center: Vector2, radius: float, width: int = 0):
         pos = self.to_camera(center)
         pygame.draw.circle(self.screen, color, (int(pos.x), int(pos.y)), int(radius * self.zoom), width=width)
+    
+    def draw_polygon(self, color, points: Sequence[Vector2], width: int = 0):
+        pygame.draw.polygon(self.screen, color, [self.to_camera(p) for p in points], width)
 
     def draw_dashed_line(self, color, p1: Vector2, p2: Vector2, width: float = 1, dash_length: int = 10):
         origin = p1
@@ -112,6 +122,20 @@ class Renderer:
             start = origin + (slope *    index    * dash_length)
             end   = origin + (slope * (index + 1) * dash_length)
             self.draw_line(color, start, end, width)
+    
+    def draw_directional_head(self, color, p1: Vector2, p2: Vector2, width: float = 1, end_length: float = 10):
+        length = p1.distance_to(p2)
+        if length == 0: return
+
+        start = p1 + (p2 - p1) * ((length - end_length) / length)
+        angle = Vector2(0, 0).angle_to(p2 - p1)
+        points = [
+            rotate_point(Vector2(start.x, start.y + width / 2), start, angle),
+            rotate_point(Vector2(start.x, start.y - width / 2), start, angle),
+            rotate_point(Vector2(p2.x, p2.y - width / 2), p2, angle),
+            rotate_point(Vector2(p2.x, p2.y + width / 2), p2, angle),
+        ]
+        self.draw_polygon(color, points) # TODO
     
 
     def update_hovering_node(self):
@@ -131,12 +155,14 @@ class Renderer:
         node = Node(Vector2(pos.x, pos.y))
         self.engine.graph[node] = set()
         self.selected_node = node
+        self.calculate_paths()
 
         return node
 
     def place_edge(self, n1: Node, n2: Node):
         if n2 is not n1:
             self.engine.graph[n1].add(Edge(n1, n2))
+            self.calculate_paths()
         self.selected_node = n2
 
     def process_left_click(self):
@@ -148,17 +174,26 @@ class Renderer:
     def delete_selected(self):
         if self.nearby_node is not None:
             self.engine.remove_node(self.nearby_node)
+            if self.nearby_node == self.start: self.start = None
+            if self.nearby_node == self.end: self.end = None
+            self.calculate_paths()
             self.selected_node = None
             self.nearby_node = None
             self.node_dragging = None
     
+    def calculate_paths(self):
+        if self.start:
+            print("recalculating paths.")
+            self.engine.computed = dijkstra(self.engine.graph, self.start)
+            self.maybe_update_path()
+    
     def maybe_update_path(self):
+        self.path.clear()
         if self.start and self.end:
-            edge = self.engine.computed[self.end]
+            edge = self.engine.computed[self.end].shortest_parent
             while edge:
-                # TODO: finish this
-                #self.path.add()
-                pass
+                self.path.add(edge)
+                edge = self.engine.computed[edge.start].shortest_parent
 
     def render(self):
         event = pygame.event.poll()
@@ -209,17 +244,22 @@ class Renderer:
             
             if self.node_dragging is not None:
                 self.node_dragging.pos += world_movement
+                self.calculate_paths()
 
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.selected_node = None
+            elif event.key == pygame.K_d:
+                for node, edges in self.engine.graph.items():
+                    print(node)
+                    for edge in edges:
+                        print(f"    {edge}")
             if self.nearby_node is not None and self.selected_node is None and self.node_dragging is None:
                 # nearby and not drawing and not dragging
                 if event.key == pygame.K_s:
                     self.start = self.nearby_node
-                    self.engine.computed = dijkstra(self.engine.graph, self.start)
                     if self.end == self.nearby_node: self.end = None
-                    self.maybe_update_path()
+                    self.calculate_paths()
                 elif event.key == pygame.K_e:
                     self.end = self.nearby_node
                     if self.start == self.nearby_node: self.start = None
@@ -251,13 +291,28 @@ class Renderer:
 
         # rendering graph
         for node, edges in self.engine.graph.items():
-            color = (255, 255, 255)
             for edge in edges:
+                color = (255, 255, 255)
+                if edge in self.path or Edge(edge.end, edge.start) in self.path:
+                    color = (255, 0, 0)
+
+                # TODO: signify edge direction
                 self.draw_line(
                     color,
                     node.pos,
                     edge.end.pos,
                     self.EDGE_THICKNESS
+                )
+                # BUG: fix identical edges going in opposite directions
+        
+        for node, edges in self.engine.graph.items():
+            for edge in edges:
+                self.draw_directional_head(
+                    (232, 222, 130),
+                    node.pos,
+                    edge.end.pos,
+                    self.EDGE_THICKNESS * 3,
+                    min(self.SELECT_RANGE * 2, node.pos.distance_to(edge.end.pos))
                 )
         
         for node, edges in self.engine.graph.items():
