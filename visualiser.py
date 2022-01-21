@@ -235,7 +235,7 @@ class Renderer:
 
         elif event.type == pygame.MOUSEMOTION:
             movement = pygame.mouse.get_rel()
-            world_movement = self.to_world(Vector2(*movement))
+            world_movement = Vector2(*movement) / self.zoom
 
             self.update_hovering_node()
 
