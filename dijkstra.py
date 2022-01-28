@@ -6,20 +6,19 @@ import heapq
 from abc import abstractmethod
 
 class BaseEdge:
-    @property
-    @abstractmethod
-    def end(self) -> Hashable: ...
-
-    @property
-    @abstractmethod
-    def weight(self) -> Union[float, int]: ...
+    end: Hashable
+    weight: Union[int, float]
 
     @abstractmethod
     def __hash__(self) -> int: ...
 
-class MyEdge(BaseEdge, NamedTuple):
+@dataclass
+class MyEdge(BaseEdge):
     end: Hashable  # directional graph
-    weight: int
+    weight: Union[int, float]
+
+    def __hash__(self) -> int:
+        return hash((self.end,))
 
 @dataclass
 class Dist:

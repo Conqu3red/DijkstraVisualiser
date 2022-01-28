@@ -35,7 +35,7 @@ class Node:
         return hash(self.id)
 
 @dataclass
-class Edge:
+class Edge(BaseEdge):
     start: Node
     end: Node  # directional graph
     
